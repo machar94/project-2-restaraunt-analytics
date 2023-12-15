@@ -1,0 +1,18 @@
+[tool.poetry]
+name = "project-2-restaraunt-analytics"
+version = "0.1.0"
+description = ""
+authors = ["Madhav Achar <acharmd@gmail.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.10"
+pandas = "^2.1.4"
+jupyter = "^1.0.0"
+notebook = "^7.0.6"
+matplotlib = "^3.8.2"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
