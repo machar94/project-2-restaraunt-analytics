@@ -47,19 +47,19 @@ def standardizeString(df: pd.DataFrame, subset: Dict[str, str]) -> pd.DataFrame:
         for p in remove_punctuation:
             df[c2] = df[c2].str.replace(p, '')
 
-    # Open a file to write to
-    f = open('output.txt', 'w')
+    # # Open a file to write to
+    # f = open('output.txt', 'w')
 
-    for v in df[c2]:
+    # for v in df[c2]:
 
-        try:
-            if not pd.isnull(v) and any(c in string.punctuation.replace('&', '').replace('(', '').replace(')', '').replace('/', '') for c in v):
-                f.write(v + '\n')
-        except:
-            print(v)
-            print(type(v))
-            exit()
+    #     try:
+    #         if not pd.isnull(v) and any(c in string.punctuation.replace('&', '').replace('(', '').replace(')', '').replace('/', '') for c in v):
+    #             f.write(v + '\n')
+    #     except:
+    #         print(v)
+    #         print(type(v))
+    #         exit()
 
-    f.close()
+    # f.close()
 
     return df

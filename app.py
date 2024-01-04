@@ -4,6 +4,10 @@ import pandas as pd
 import format
 import random
 import string
+from tqdm import tqdm
+
+
+primaryKeyLength = 16
 
 
 #############
@@ -11,9 +15,46 @@ import string
 #############
 
 
+def generateRandomString(length=primaryKeyLength) -> str:
+    '''
+
+    Generate a random string of length characters
+    '''
+    return ''.join(random.choices(string.ascii_letters + string.digits, k=length))
+
+
+def assignBranchID(df: pd.DataFrame, verbose=False) -> pd.DataFrame:
+    '''
+    Assign a unique 16 character BranchID for each unique branch where branch is
+    determined based on location.
+    '''
+
+    # Create a BranchID for each row
+    df['BranchID'] = None
+
+    if verbose:
+        print('Assigning BranchIDs to each row')
+        grouped = tqdm(df.groupby(
+            ['FormattedLegalBusinessName', 'FormattedBusinessAddress'], dropna=True))
+    else:
+        grouped = df.groupby(
+            ['FormattedLegalBusinessName', 'FormattedBusinessAddress'], dropna=True)
+
+    # Iterate through location address and assign a BranchID
+    # TODO: Update the groupby function
+    for _, df_address in grouped:
+        branch_id = generateRandomString()
+
+        for index, _ in df_address.iterrows():
+            df.loc[index, 'BranchID'] = branch_id
+
+    return df
+
+
 def formatOpenRestaurantApplications(df: pd.DataFrame) -> pd.DataFrame:
     '''
-    Clean, transform and normalize the data from the OpenRestaurantApplications.csv file
+    Clean, transform and normalize the data from the
+    OpenRestaurantApplications.csv file
     '''
 
     # Rename LegalBusinessName to RawLegalBusinessName
@@ -28,14 +69,37 @@ def formatOpenRestaurantApplications(df: pd.DataFrame) -> pd.DataFrame:
 
 def formatOpenRestaurantInspections(df: pd.DataFrame) -> pd.DataFrame:
     '''
-    Clean, transform and normalize the data from the OpenRestaurantInspections.csv file
+    Clean, transform and normalize the data from the
+    OpenRestaurantInspections.csv file
     '''
+
+    # Rename LegalBusinessName to RawLegalBusinessName
+    df = df.rename(columns={'LegalBusinessName': 'RawLegalBusinessName'})
+
+    # Standardize the LegalBusinessName
+    df = format.standardizeString(
+        df, {'RawLegalBusinessName': 'FormattedLegalBusinessName'})
+
+    # Drop all rows where FormattedLegalBusinessName is null
+    df = df.dropna(subset=['FormattedLegalBusinessName'])
+
+    # Rename BusinessAddress to RawBusinessAddress
+    df = df.rename(columns={'BusinessAddress': 'RawBusinessAddress'})
+
+    # Standardize the BusinessAddress
+    df = format.standardizeString(
+        df, {'RawBusinessAddress': 'FormattedBusinessAddress'})
+
+    # Assign a BranchID to each row
+    df = assignBranchID(df, verbose=True)
+
     return df
 
 
 def formatRestaurantInspections(df: pd.DataFrame) -> pd.DataFrame:
     '''
-    Clean, transform and normalize the data from the RestaurantInspections.csv file
+    Clean, transform and normalize the data from the RestaurantInspections.csv
+    file
     '''
     return df
 
@@ -49,11 +113,15 @@ def assembleTables(datasets: dict[str, pd.DataFrame]) -> dict[str, pd.DataFrame]
     # Create businesses table
     df_businesses = pd.DataFrame()
 
-    df = datasets['OpenRestaurantApplications']
+    df = datasets['OpenRestaurantInspections']
 
     df_businesses['FormattedLegalBusinessName'] = df['FormattedLegalBusinessName']
-    df_businesses['BranchID'] = df['FormattedLegalBusinessName'].apply(lambda x:
-                                                                       ''.join(random.choices(string.ascii_letters + string.digits, k=16)))
+    df_businesses['FormattedBusinessAddress'] = df['FormattedBusinessAddress']
+    df_businesses['RawLegalBusinessName'] = df['RawLegalBusinessName']
+    df_businesses['RawBusinessAddress'] = df['RawBusinessAddress']
+    df_businesses['BranchID'] = df['BranchID']
+
+    df_businesses.drop_duplicates(subset=['FormattedLegalBusinessName', 'FormattedBusinessAddress'], inplace=True)
 
     tables['businesses'] = df_businesses
 
