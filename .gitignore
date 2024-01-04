@@ -1,0 +1,8 @@
+# Python
+__pycache__/**
+
+# Post processed data files
+data/formatted/*.csv
+
+# Custom files
+output.txt
