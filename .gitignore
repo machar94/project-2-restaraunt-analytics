@@ -4,5 +4,6 @@ __pycache__/**
 # Post processed data files
 data/formatted/*.csv
 
-# Custom files
+# Custom files/folders
+debug/**
 output.txt

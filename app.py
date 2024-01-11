@@ -17,7 +17,15 @@ from typing import Union
 # GLOBALS #
 ###########
 
+# Contains the configuration for the app
 CONFIG_PATH = os.path.join(os.path.dirname(__file__), 'config/config.yaml')
+
+# Contains specific edits to the raw data
+EDITS_PATH = os.path.join(os.path.dirname(__file__), 'data/raw/edits.yaml')
+
+# Folder to write debug artifacts
+OUTPUT_DIR = os.path.join(os.path.dirname(__file__), 'debug')
+
 primaryKeyLength = 16
 
 
@@ -106,13 +114,13 @@ def fillTables(datasets: dict[str, pd.DataFrame], tables: dict[str, pd.DataFrame
     fillSidewalkInspectionTable(tables, datasets)
 
 
-def editData(filename: str, dfs: dict[str, pd.DataFrame]) -> dict[str, pd.DataFrame]:
+def editData(dfs: dict[str, pd.DataFrame], verbose=False, debug=False) -> dict[str, pd.DataFrame]:
     '''
     Make edits to the raw data
     '''
 
     # Open the file
-    with open(filename) as file:
+    with open(EDITS_PATH) as file:
         raw_edits = yaml.load(file, Loader=yaml.FullLoader)
 
     # Iterate through each edit
@@ -124,6 +132,12 @@ def editData(filename: str, dfs: dict[str, pd.DataFrame]) -> dict[str, pd.DataFr
     # Test files can be reindexed after edits have been made
     for df in dfs.values():
         df.reset_index(inplace=True, drop=True)
+
+    if debug:
+        if not os.path.exists(OUTPUT_DIR):
+            os.makedirs(OUTPUT_DIR)
+        for name, df in dfs.items():
+            df.to_csv(os.path.join(OUTPUT_DIR, f'{name}_edit.csv'))
 
     return dfs
 
@@ -322,6 +336,8 @@ if __name__ == '__main__':
     argparser = argparse.ArgumentParser(
         description='Format the data from the csv files into a format that can be used by the database')
     argparser.add_argument('dataset', metavar='dataset', type=str)
+    argparser.add_argument('--debug', '-d', action='store_true', default=False,
+                           help='Generate debug artifacts in debug/')
     argparser.add_argument('--verbose', '-v', action='store_true',
                            default=False, help='Print verbose output')
     args = argparser.parse_args()
@@ -372,7 +388,7 @@ if __name__ == '__main__':
     # Format Rows #
     ###############
 
-    editData('data/raw/edits.yaml', datasets)
+    editData(datasets, verbose=args.verbose, debug=args.debug)
 
     if 'OpenRestaurantApplications' in datasets:
         datasets['OpenRestaurantApplications'] = formatOpenRestaurantApplications(
