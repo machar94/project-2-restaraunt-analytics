@@ -1,0 +1,12 @@
+dataset:
+  - name: full
+    files:
+      - 'data/raw/1_OpenRestaurantApplications.csv'
+      - 'data/raw/2_OpenRestaurantInspections.csv'
+      - 'data/raw/3_RestaurantInspections.csv'
+  - name: test-small
+    files:
+      - 'data/test/100_OpenRestaurantInspections.csv'
+  - name: test-medium
+    files:
+      - 'data/test/1000_OpenRestaurantInspections.csv'

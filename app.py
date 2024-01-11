@@ -1,7 +1,9 @@
 # This app is used to format the data from the csv files into a format that can be used by the database
 
 
+import argparse
 import format
+import os
 import pandas as pd
 import pytz
 import random
@@ -11,6 +13,11 @@ import yaml
 from tqdm import tqdm
 from typing import Union
 
+###########
+# GLOBALS #
+###########
+
+CONFIG_PATH = os.path.join(os.path.dirname(__file__), 'config/config.yaml')
 primaryKeyLength = 16
 
 
@@ -90,7 +97,7 @@ def fillSidewalkInspectionTable(tables: dict[str, pd.DataFrame], df: pd.DataFram
             })
 
         tables['SidewalkInspection'] = pd.concat(
-        [tables['SidewalkInspection'], pd.DataFrame(to_add)], ignore_index=True)
+            [tables['SidewalkInspection'], pd.DataFrame(to_add)], ignore_index=True)
 
 
 def fillTables(datasets: dict[str, pd.DataFrame], tables: dict[str, pd.DataFrame]) -> None:
@@ -110,13 +117,13 @@ def editData(filename: str, dfs: dict[str, pd.DataFrame]) -> dict[str, pd.DataFr
 
     # Iterate through each edit
     for edit in raw_edits:
-
-        # Convert X_name.csv to name
-        key = edit['file'].split('_')[1].split('.')[0]
-
-        if key in dfs:
+        if edit['key'] in dfs:
             for row in edit['row']:
-                dfs[key].loc[row, edit['column']] = edit['value']
+                dfs[edit['key']].loc[row, edit['column']] = edit['value']
+
+    # Test files can be reindexed after edits have been made
+    for df in dfs.values():
+        df.reset_index(inplace=True, drop=True)
 
     return dfs
 
@@ -310,71 +317,84 @@ def assembleTables(datasets: dict[str, pd.DataFrame]) -> dict[str, pd.DataFrame]
     return tables
 
 
-##############
-# User Input #
-##############
+if __name__ == '__main__':
 
+    argparser = argparse.ArgumentParser(
+        description='Format the data from the csv files into a format that can be used by the database')
+    argparser.add_argument('dataset', metavar='dataset', type=str)
+    argparser.add_argument('--verbose', '-v', action='store_true',
+                           default=False, help='Print verbose output')
+    args = argparser.parse_args()
 
-print('Select a dataset to format\n')
-print('1. 1_OpenRestaurantApplications.csv')
-print('2. 2_OpenRestaurantInspections.csv')
-print('3. 3_RestaurantInspections.csv')
-print('4. All datasets')
+    # Read the dataset argument and check if it is one of the available datasets
+    # in the config file
+    with open(CONFIG_PATH) as file:
+        config = yaml.load(file, Loader=yaml.FullLoader)
 
-selection = 0
-while selection < 1 or selection > 4:
-    selection = input('\nPlease select a database to format (1-4): ')
+        datasets = [dataset['name'] for dataset in config['dataset']]
 
-    try:
-        selection = int(selection)
-        break
-    except:
-        pass
+        if args.dataset not in datasets:
+            print(f'\nInvalid dataset option selected: {args.dataset}\n')
 
+            print('Available datasets:')
+            for dataset in datasets:
+                print(f'\t- {dataset}')
+            exit()
+        else:
+            files = config['dataset'][datasets.index(args.dataset)]['files']
 
-datasets = {}
-if selection == 1 or selection == 4:
-    datasets['OpenRestaurantApplications'] = pd.read_csv(
-        'data/raw/1_OpenRestaurantApplications.csv')
-elif selection == 2 or selection == 4:
-    datasets['OpenRestaurantInspections'] = pd.read_csv(
-        'data/raw/2_OpenRestaurantInspections.csv')
-elif selection == 3 or selection == 4:
-    datasets['RestaurantInspections'] = pd.read_csv(
-        'data/raw/3_RestaurantInspections.csv')
-else:
-    print('Invalid format option selected')
-    exit()
+    #################
+    # Load datasets #
+    #################
 
+    # Test datasets contain an Index column
 
-###############
-# Format Rows #
-###############
+    datasets = {}
 
-editData('data/raw/edits.yaml', datasets)
+    for file in files:
+        if 'OpenRestaurantApplications' in file:
+            datasets['OpenRestaurantApplications'] = pd.read_csv(file)
+            if 'Index' in datasets['OpenRestaurantApplications'].columns:
+                datasets['OpenRestaurantApplications'].set_index(
+                    'Index', inplace=True)
+        elif 'OpenRestaurantInspections' in file:
+            datasets['OpenRestaurantInspections'] = pd.read_csv(file)
+            if 'Index' in datasets['OpenRestaurantInspections'].columns:
+                datasets['OpenRestaurantInspections'].set_index(
+                    'Index', inplace=True)
+        elif 'RestaurantInspections' in file:
+            datasets['RestaurantInspections'] = pd.read_csv(file)
+            if 'Index' in datasets['RestaurantInspections'].columns:
+                datasets['RestaurantInspections'].set_index(
+                    'Index', inplace=True)
 
-if 'OpenRestaurantApplications' in datasets:
-    datasets['OpenRestaurantApplications'] = formatOpenRestaurantApplications(
-        datasets['OpenRestaurantApplications'])
-if 'OpenRestaurantInspections' in datasets:
-    datasets['OpenRestaurantInspections'] = formatOpenRestaurantInspections(
-        datasets['OpenRestaurantInspections'])
-if 'RestaurantInspections' in datasets:
-    datasets['RestaurantInspections'] = formatRestaurantInspections(
-        datasets['RestaurantInspections'])
+    ###############
+    # Format Rows #
+    ###############
 
+    editData('data/raw/edits.yaml', datasets)
 
-###################
-# Assemble Tables #
-###################
+    if 'OpenRestaurantApplications' in datasets:
+        datasets['OpenRestaurantApplications'] = formatOpenRestaurantApplications(
+            datasets['OpenRestaurantApplications'])
+    if 'OpenRestaurantInspections' in datasets:
+        datasets['OpenRestaurantInspections'] = formatOpenRestaurantInspections(
+            datasets['OpenRestaurantInspections'])
+    if 'RestaurantInspections' in datasets:
+        datasets['RestaurantInspections'] = formatRestaurantInspections(
+            datasets['RestaurantInspections'])
 
-tables = assembleTables(datasets)
+    ###################
+    # Assemble Tables #
+    ###################
 
-#################
-# Write To Disk #
-#################
+    tables = assembleTables(datasets)
 
-print("\nWriting to disk in data/formatted ...")
+    #################
+    # Write To Disk #
+    #################
 
-for table_name, data in tables.items():
-    data.to_csv(f'data/formatted/{table_name}.csv', index=False)
+    print("\nWriting to disk in data/formatted ...")
+
+    for table_name, data in tables.items():
+        data.to_csv(f'data/formatted/{table_name}.csv', index=False)

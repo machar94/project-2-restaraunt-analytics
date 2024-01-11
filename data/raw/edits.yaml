@@ -1,30 +1,30 @@
-- file: 1_OpenRestaurantApplications.csv
+- key: OpenRestaurantApplications
   row: 
     - 10311
   column: Restaurant Name
   value: Elsayed 4 LLC
-- file: 2_OpenRestaurantInspections.csv
+- key: OpenRestaurantInspections
   row: 
     - 73678
   column: RestaurantName
   value: MISTURA PERUANA SANGUCHERIA
-- file: 2_OpenRestaurantInspections.csv
+- key: OpenRestaurantInspections
   row: 
     - 73678
   column: LegalBusinessName
   value: 86-06 SANGUCHERIA INC.
-- file: 2_OpenRestaurantInspections.csv
+- key: OpenRestaurantInspections
   row: 
     - 2122
     - 74994
   column: RestaurantName
   value: 375 Chicken 'n Fries
-- file: 2_OpenRestaurantInspections.csv
+- key: OpenRestaurantInspections
   row: 
     - 7514
   column: RestaurantName
   value: Blank Slate Coffee + Kitchen NoMad
-- file: 2_OpenRestaurantInspections.csv
+- key: OpenRestaurantInspections
   row: 
     - 4279
     - 5899
