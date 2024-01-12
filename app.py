@@ -123,15 +123,23 @@ def editData(dfs: dict[str, pd.DataFrame], verbose=False, debug=False) -> dict[s
     with open(EDITS_PATH) as file:
         raw_edits = yaml.load(file, Loader=yaml.FullLoader)
 
+    num_edits = 0
+
     # Iterate through each edit
     for edit in raw_edits:
         if edit['key'] in dfs:
             for row in edit['row']:
-                dfs[edit['key']].loc[row, edit['column']] = edit['value']
+                if row in dfs[edit['key']].index:
+                    print(f'Edit: {edit["key"]}, Row: {row}, Column: {edit["column"]}, Value: {edit["value"]}')
+                    dfs[edit['key']].loc[row, edit['column']] = edit['value']
+                    num_edits += 1
 
     # Test files can be reindexed after edits have been made
     for df in dfs.values():
         df.reset_index(inplace=True, drop=True)
+
+    if verbose:
+        print(f'\nMade {num_edits} edits to the raw data')
 
     if debug:
         if not os.path.exists(OUTPUT_DIR):
