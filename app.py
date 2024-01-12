@@ -26,6 +26,9 @@ EDITS_PATH = os.path.join(os.path.dirname(__file__), 'data/raw/edits.yaml')
 # Folder to write debug artifacts
 OUTPUT_DIR = os.path.join(os.path.dirname(__file__), 'debug')
 
+# Name of the file to write the Restaurant table debug artifacts to
+RESTAURANT_MATCH_PATH = os.path.join(OUTPUT_DIR, 'Restaurant_match.csv')
+
 # Statistics about the data conversion
 G_stats = {}
 
@@ -38,36 +41,82 @@ primaryKeyLength = 16
 #############
 
 
-def matchRestaraunt(row: pd.Series, df: pd.DataFrame) -> Union[pd.Series, None]:
+def matchRestaraunt(row: pd.Series, restaurants: list[dict]) -> Union[dict, None]:
     '''
-    Check if a restaurant already exists in the Restaurant table
+    Check if a restaurant already exists in the list of restaurants. Match by street address.
     '''
+
+    for restaurant in restaurants:
+        if restaurant['StreetAddress'] == row['StreetAddress']:
+            return restaurant
 
     return None
 
 
-def fillRestaurantTable(tables: dict[str, pd.DataFrame], datasets: dict[str, pd.DataFrame]) -> None:
+def fillRestaurantTable(tables: dict[str, pd.DataFrame], datasets: dict[str, pd.DataFrame], debug=False) -> None:
     '''
     Fill the Restaurant table
     '''
 
     if 'OpenRestaurantInspections' in datasets:
+
+        if debug:
+            # Remove Restaurant_match.csv if it exists using try and except
+            try:
+                os.remove(RESTAURANT_MATCH_PATH)
+            except:
+                pass
+
         df = datasets['OpenRestaurantInspections']
 
-        to_add, restaurant_ids = [], []
+        # Allocate a column for RestaurantID
+        df['RestaurantID'] = ''
+
+        # Organize restaurants by zip code for quicker matching
+        by_zip = {}
 
         # Iterate through rows and add to table if restarant does not exist
-        for _, row in tqdm(df.iterrows()):
+        for index, row in tqdm(df.iterrows()):
 
-            if matchRestaraunt(row, tables['Restaurant']):
+            if row['Postcode'] not in by_zip:
+                by_zip[row['Postcode']] = []
+
+            match = matchRestaraunt(row, by_zip[row['Postcode']])
+            if match is not None:
+
+                print('Restaurant already exists')
+                df.loc[index, 'RestaurantID'] = match['ID']
+
+                if (debug):
+
+                    formatted_restaurant = {
+                        'ID': match['ID'],
+                        'Name': row['Name'],
+                        'LegalBusinessName': row['LegalBusinessName'],
+                        'StreetAddress': row['StreetAddress'],
+                        'Borough': row['Borough'],
+                        'Zipcode': row['Postcode'],
+                        'Latitude': row['Latitude'],
+                        'Longitude': row['Longitude'],
+                        'CommunityBoard': row['CommunityBoard'],
+                        'CouncilDistrict': row['CouncilDistrict'],
+                        'CensusTract': row['CensusTract'],
+                        'BIN': row['BIN'],
+                        'BBL': row['BBL'],
+                        'NTA': row['NTA']
+                    }
+
+                    pd.DataFrame([match, formatted_restaurant]).to_csv(
+                        RESTAURANT_MATCH_PATH, mode='a', index=False)
+
+                # TODO: Validate remaining information
                 continue
             else:
                 id = str(generateRandomBits(64))
-                restaurant_ids.append(id)
 
-                to_add.append({
+                by_zip[row['Postcode']].append({
                     'ID': id,
-                    'Name': row['RestaurantName'],
+                    'Name': row['Name'],
                     'LegalBusinessName': row['LegalBusinessName'],
                     'StreetAddress': row['StreetAddress'],
                     'Borough': row['Borough'],
@@ -82,9 +131,12 @@ def fillRestaurantTable(tables: dict[str, pd.DataFrame], datasets: dict[str, pd.
                     'NTA': row['NTA']
                 })
 
+                df.loc[index, 'RestaurantID'] = id
+
+        restaurants = [place for places in by_zip.values() for place in places]
+
         tables['Restaurant'] = pd.concat(
-            [tables['Restaurant'], pd.DataFrame(to_add)], ignore_index=True)
-        datasets['OpenRestaurantInspections']['RestaurantID'] = restaurant_ids
+            [tables['Restaurant'], pd.DataFrame(restaurants)], ignore_index=True)
 
 
 def fillSidewalkInspectionTable(tables: dict[str, pd.DataFrame], df: pd.DataFrame) -> None:
@@ -112,9 +164,9 @@ def fillSidewalkInspectionTable(tables: dict[str, pd.DataFrame], df: pd.DataFram
             [tables['SidewalkInspection'], pd.DataFrame(to_add)], ignore_index=True)
 
 
-def fillTables(datasets: dict[str, pd.DataFrame], tables: dict[str, pd.DataFrame]) -> None:
+def fillTables(datasets: dict[str, pd.DataFrame], tables: dict[str, pd.DataFrame], debug=False) -> None:
 
-    fillRestaurantTable(tables, datasets)
+    fillRestaurantTable(tables, datasets, debug)
     fillSidewalkInspectionTable(tables, datasets)
 
 
@@ -301,7 +353,7 @@ def formatRestaurantInspections(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def assembleTables(datasets: dict[str, pd.DataFrame]) -> dict[str, pd.DataFrame]:
+def assembleTables(datasets: dict[str, pd.DataFrame], debug=False) -> dict[str, pd.DataFrame]:
     '''
     Assemble the tables from the dataframes
     '''
@@ -342,7 +394,7 @@ def assembleTables(datasets: dict[str, pd.DataFrame]) -> dict[str, pd.DataFrame]
         'Phone': pd.Series(dtype='string'),
         'Cuisine': pd.Series(dtype='string')})
 
-    fillTables(datasets, tables)
+    fillTables(datasets, tables, debug)
 
     return tables
 
@@ -424,7 +476,7 @@ if __name__ == '__main__':
     # Assemble Tables #
     ###################
 
-    tables = assembleTables(datasets)
+    tables = assembleTables(datasets, args.debug)
 
     #################
     # Write To Disk #
