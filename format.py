@@ -1,8 +1,9 @@
 import pandas as pd
+import string
+import scourgify
+
 from tqdm import tqdm
 from typing import Dict
-import string
-
 
 keep_punctuation = ['&', '(', ')', '/']
 
@@ -55,7 +56,7 @@ def standardizeString(df: pd.DataFrame, subset: Dict[str, str]) -> pd.DataFrame:
 
         # Remove all white space from value
         df[c2] = df[c2].str.replace(' ', '')
-        
+
         df[c2] = df[c2].str.replace('-', '')
         df[c2] = df[c2].str.replace('.', '')
         df[c2] = df[c2].str.replace(',', '')
@@ -73,7 +74,7 @@ def standardizeString(df: pd.DataFrame, subset: Dict[str, str]) -> pd.DataFrame:
         df[c2] = df[c2].str.replace('_', '')
         df[c2] = df[c2].str.replace('%', '')
         df[c2] = df[c2].str.replace('?', '')
-        
+
         # # Remove remaining punctuation from value
         # for p in remove_punctuation:
         #     df[c2] = df[c2].str.replace(p, '')
@@ -97,3 +98,78 @@ def standardizeString(df: pd.DataFrame, subset: Dict[str, str]) -> pd.DataFrame:
     # exit()
 
     return df
+
+
+def normalizeAddress(column: pd.Series, statistics: dict) -> pd.Series:
+    '''
+    Normalize address according to usps standards
+    '''
+
+    count = 0
+    addresses = []
+
+    for address in column:
+        try:
+            normalized_address = scourgify.normalize_address_record(address)
+
+            if normalized_address['address_line_2'] is not None:
+                street_address = ' '.join(
+                    [normalized_address['address_line_1'], normalized_address['address_line_2']])
+            else:
+                street_address = normalized_address['address_line_1']
+
+            addresses.append(street_address)
+        except Exception as e:
+            # Fallback to string normalization
+            address = normalizeStrings(pd.Series([address])).iloc[0]
+            
+            # Unnormalizable address
+            count += 1
+
+            addresses.append(address)
+
+    statistics['unnormalizable_addresses'] = f'{count} / {len(column)}: {count / len(column) * 100}%'
+
+    return pd.Series(addresses, name=column.name)
+
+
+def normalizeStrings(column: pd.Series) -> pd.Series:
+    '''
+    Normalize string according to:
+
+    1. All letters are uppercased
+    3. White space is minimized (only one space between words)
+    2. All html errors are removed
+    '''
+
+    column = column.str.upper()
+
+    # Replace instances of é with e
+    column = column.str.replace('+?', 'E')
+
+    # Replace instances of ó with o
+    column = column.str.replace('+AE', 'O')
+
+    # Replace instances of â with a
+    column = column.str.replace('+E', 'A')
+
+    # Replace instances of á with a
+    column = column.str.replace('+U', 'A')
+
+    # Example v+isquez to vasquez
+    column = column.str.replace('+I', 'A')
+
+    # Example Frank-?s to Frank's
+    column = column.str.replace('-?S', "'S")
+
+    # Hurley;s to Hurley's
+    column = column.str.replace('Y;S', "'S")
+
+    column = column.str.replace('&AMP;', '&')
+
+    # Convert all white space to a single space
+    column = column.str.replace(r'\s+', ' ', regex=True)
+
+    # TODO: Add debug option to review unnormalizable strings
+
+    return column

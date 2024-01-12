@@ -26,6 +26,10 @@ EDITS_PATH = os.path.join(os.path.dirname(__file__), 'data/raw/edits.yaml')
 # Folder to write debug artifacts
 OUTPUT_DIR = os.path.join(os.path.dirname(__file__), 'debug')
 
+# Statistics about the data conversion
+G_stats = {}
+
+
 primaryKeyLength = 16
 
 
@@ -64,8 +68,8 @@ def fillRestaurantTable(tables: dict[str, pd.DataFrame], datasets: dict[str, pd.
                 to_add.append({
                     'ID': id,
                     'Name': row['RestaurantName'],
-                    'LegalBusinessName': row['FormattedLegalBusinessName'],
-                    'StreetAddress': row['FormattedBusinessAddress'],
+                    'LegalBusinessName': row['LegalBusinessName'],
+                    'StreetAddress': row['StreetAddress'],
                     'Borough': row['Borough'],
                     'Zipcode': row['Postcode'],
                     'Latitude': row['Latitude'],
@@ -130,7 +134,6 @@ def editData(dfs: dict[str, pd.DataFrame], verbose=False, debug=False) -> dict[s
         if edit['key'] in dfs:
             for row in edit['row']:
                 if row in dfs[edit['key']].index:
-                    print(f'Edit: {edit["key"]}, Row: {row}, Column: {edit["column"]}, Value: {edit["value"]}')
                     dfs[edit['key']].loc[row, edit['column']] = edit['value']
                     num_edits += 1
 
@@ -142,8 +145,6 @@ def editData(dfs: dict[str, pd.DataFrame], verbose=False, debug=False) -> dict[s
         print(f'\nMade {num_edits} edits to the raw data')
 
     if debug:
-        if not os.path.exists(OUTPUT_DIR):
-            os.makedirs(OUTPUT_DIR)
         for name, df in dfs.items():
             df.to_csv(os.path.join(OUTPUT_DIR, f'{name}_edit.csv'))
 
@@ -209,19 +210,36 @@ def formatOpenRestaurantApplications(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def formatOpenRestaurantInspections(df: pd.DataFrame) -> pd.DataFrame:
+def formatOpenRestaurantInspections(df: pd.DataFrame, debug=False) -> pd.DataFrame:
     '''
     Clean, transform and normalize the data from the
     OpenRestaurantInspections.csv file
     '''
 
+    ###########
+    # Borough #
+    ###########
+
+    df['Borough'] = df['Borough'].str.upper()
+
     ###################
     # Restaurant Name #
     ###################
 
-    # Standardize the RestaurantName
-    df = format.standardizeString(
-        df, {'RestaurantName': 'FormattedRestaurantName'})
+    df['Name'] = format.normalizeStrings(df['RestaurantName'])
+
+    #######################
+    # Legal Business Name #
+    #######################
+
+    df['LegalBusinessName'] = format.normalizeStrings(df['LegalBusinessName'])
+
+    ####################
+    # Business Address #
+    ####################
+
+    df['StreetAddress'] = format.normalizeAddress(
+        df['BusinessAddress'], G_stats)
 
     ###############
     # InspectedOn #
@@ -262,25 +280,15 @@ def formatOpenRestaurantInspections(df: pd.DataFrame) -> pd.DataFrame:
     # Do nothing. Don't want to fill in null values with 'NA' because it will be
     # confusing when 3 and 4 letter codes
 
-    # Rename LegalBusinessName to RawLegalBusinessName
-    df = df.rename(columns={'LegalBusinessName': 'RawLegalBusinessName'})
+    #######
+    # NTA #
+    #######
 
-    # Standardize the LegalBusinessName
-    df = format.standardizeString(
-        df, {'RawLegalBusinessName': 'FormattedLegalBusinessName'})
+    df['NTA'] = df['NTA'].str.upper()
 
-    # Drop all rows where FormattedLegalBusinessName is null
-    df = df.dropna(subset=['FormattedLegalBusinessName'])
-
-    # Rename BusinessAddress to RawBusinessAddress
-    df = df.rename(columns={'BusinessAddress': 'RawBusinessAddress'})
-
-    # Standardize the BusinessAddress
-    df = format.standardizeString(
-        df, {'RawBusinessAddress': 'FormattedBusinessAddress'})
-
-    # Assign a BranchID to each row
-    # df = assignBranchID(df, verbose=True)
+    if debug:
+        df.to_csv(os.path.join(
+            OUTPUT_DIR, 'OpenRestaurantInspections_formatted.csv'))
 
     return df
 
@@ -367,6 +375,10 @@ if __name__ == '__main__':
         else:
             files = config['dataset'][datasets.index(args.dataset)]['files']
 
+    if args.debug:
+        if not os.path.exists(OUTPUT_DIR):
+            os.makedirs(OUTPUT_DIR)
+
     #################
     # Load datasets #
     #################
@@ -403,7 +415,7 @@ if __name__ == '__main__':
             datasets['OpenRestaurantApplications'])
     if 'OpenRestaurantInspections' in datasets:
         datasets['OpenRestaurantInspections'] = formatOpenRestaurantInspections(
-            datasets['OpenRestaurantInspections'])
+            datasets['OpenRestaurantInspections'], args.debug)
     if 'RestaurantInspections' in datasets:
         datasets['RestaurantInspections'] = formatRestaurantInspections(
             datasets['RestaurantInspections'])
@@ -422,3 +434,8 @@ if __name__ == '__main__':
 
     for table_name, data in tables.items():
         data.to_csv(f'data/formatted/{table_name}.csv', index=False)
+
+    # Pretty print the statistics
+    print('\nStatistics:')
+    for key, value in G_stats.items():
+        print(f'\t{key}: {value}')
