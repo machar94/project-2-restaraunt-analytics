@@ -53,6 +53,26 @@ def matchRestaraunt(row: pd.Series, restaurants: list[dict]) -> Union[dict, None
     return None
 
 
+def mergeRestaurants(match: dict, row: pd.Series) -> None:
+    '''
+    Merge strategy is that values should be exactly the same. If they are not
+    then raise an exception.
+    '''
+
+    for key, value in match.items():
+
+        # No need to check ID wiht Restaurant ID since it is the same
+        if key == 'ID':
+            continue
+        elif key == 'Zipcode':
+            if value != row['Postcode']:
+                raise Exception(f'{key} does not match')
+            continue
+        else:
+            if value != row[key]:
+                raise Exception(f'{key} does not match')
+    
+
 def fillRestaurantTable(tables: dict[str, pd.DataFrame], datasets: dict[str, pd.DataFrame], debug=False) -> None:
     '''
     Fill the Restaurant table
@@ -84,32 +104,42 @@ def fillRestaurantTable(tables: dict[str, pd.DataFrame], datasets: dict[str, pd.
             match = matchRestaraunt(row, by_zip[row['Postcode']])
             if match is not None:
 
-                print('Restaurant already exists')
                 df.loc[index, 'RestaurantID'] = match['ID']
 
-                if (debug):
+                try:
+                    mergeRestaurants(match, row)
+                except Exception as e:
 
-                    formatted_restaurant = {
-                        'ID': match['ID'],
-                        'Name': row['Name'],
-                        'LegalBusinessName': row['LegalBusinessName'],
-                        'StreetAddress': row['StreetAddress'],
-                        'Borough': row['Borough'],
-                        'Zipcode': row['Postcode'],
-                        'Latitude': row['Latitude'],
-                        'Longitude': row['Longitude'],
-                        'CommunityBoard': row['CommunityBoard'],
-                        'CouncilDistrict': row['CouncilDistrict'],
-                        'CensusTract': row['CensusTract'],
-                        'BIN': row['BIN'],
-                        'BBL': row['BBL'],
-                        'NTA': row['NTA']
-                    }
+                    print(e)
 
-                    pd.DataFrame([match, formatted_restaurant]).to_csv(
-                        RESTAURANT_MATCH_PATH, mode='a', index=False)
+                    if debug:
+                        with open('debug/Restaurant_match.csv', 'a') as file:
 
-                # TODO: Validate remaining information
+                            formatted_restaurant = {
+                                'ID': match['ID'],
+                                'Name': row['Name'],
+                                'LegalBusinessName': row['LegalBusinessName'],
+                                'StreetAddress': row['StreetAddress'],
+                                'Borough': row['Borough'],
+                                'Zipcode': row['Postcode'],
+                                'Latitude': row['Latitude'],
+                                'Longitude': row['Longitude'],
+                                'CommunityBoard': row['CommunityBoard'],
+                                'CouncilDistrict': row['CouncilDistrict'],
+                                'CensusTract': row['CensusTract'],
+                                'BIN': row['BIN'],
+                                'BBL': row['BBL'],
+                                'NTA': row['NTA']
+                            }
+                                                
+                            file.write('Match:\n')
+                            pd.DataFrame([match, formatted_restaurant]).to_csv(
+                                file, mode='a', index=False)
+                            file.write('\n')
+                    else:
+                        print('Restaurant does not match')
+                        exit()
+
                 continue
             else:
                 id = str(generateRandomBits(64))
@@ -305,7 +335,7 @@ def formatOpenRestaurantInspections(df: pd.DataFrame, debug=False) -> pd.DataFra
 
     try:
         inspected_on = pd.to_datetime(
-            df['InspectedOn'], errors='raise').dt.tz_localize(eastern)
+            df['InspectedOn'], format='%m/%d/%Y %I:%M:%S %p', exact=True, errors='raise').dt.tz_localize(eastern)
         df['InspectedOn'] = inspected_on.dt.tz_convert(pytz.utc)
     except:
         print('Cannot convert all values in InspectedOn to a date')
