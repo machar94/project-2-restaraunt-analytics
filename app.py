@@ -59,6 +59,8 @@ def mergeRestaurants(match: dict, row: pd.Series) -> None:
     then raise an exception.
     '''
 
+    unmatched_keys = []
+
     for key, value in match.items():
 
         # No need to check ID wiht Restaurant ID since it is the same
@@ -66,12 +68,15 @@ def mergeRestaurants(match: dict, row: pd.Series) -> None:
             continue
         elif key == 'Zipcode':
             if value != row['Postcode']:
-                raise Exception(f'{key} does not match')
-            continue
+                unmatched_keys.append(key)
+                continue
         else:
             if value != row[key]:
-                raise Exception(f'{key} does not match')
+                unmatched_keys.append(key)
     
+    if len(unmatched_keys) > 0:
+        raise Exception(f'Unmatched keys: {unmatched_keys}')
+
 
 def fillRestaurantTable(tables: dict[str, pd.DataFrame], datasets: dict[str, pd.DataFrame], debug=False) -> None:
     '''
@@ -132,7 +137,7 @@ def fillRestaurantTable(tables: dict[str, pd.DataFrame], datasets: dict[str, pd.
                                 'NTA': row['NTA']
                             }
                                                 
-                            file.write('Match:\n')
+                            file.write(e.args[0] + '\n')
                             pd.DataFrame([match, formatted_restaurant]).to_csv(
                                 file, mode='a', index=False)
                             file.write('\n')
